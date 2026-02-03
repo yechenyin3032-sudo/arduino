@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管路監測系統 Pro</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-main: #1c1e21;
+            --text-sub: #606770;
+            --primary-blue: #2e69ff;
+            --danger-red: #fb4b4b;
+            --warning-orange: #fca130;
+            --success-green: #2ecc71;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container { width: 100%; max-width: 500px; }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .data-item { background: #f8f9fa; padding: 15px; border-radius: 12px; }
+        .data-label { font-size: 13px; color: var(--text-sub); }
+        .data-value { font-size: 20px; font-weight: bold; margin-top: 5px; }
+
+        .logic-list { list-style: none; padding: 0; margin: 0; }
+        .logic-list li {
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logic-list li:last-child { border-bottom: none; }
+        
+        .badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status-box {
+            text-align: center;
+            padding: 20px;
+            background: #ffffff;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 20px;
+            border: 2px solid #ddd;
+            transition: all 0.3s ease;
+        }
+
+        /* 狀態顏色定義 */
+        .status-normal { color: var(--success-green); background: #eafaf1; border-color: var(--success-green); }
+        .status-danger { color: var(--danger-red); background: #fdeded; border-color: var(--danger-red); }
+        .status-warning { color: var(--warning-orange); background: #fef5e7; border-color: var(--warning-orange); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header" style="margin-bottom: 20px; text-align: center;">
+        <h2 style="margin: 0; font-size: 24px;">🌊 管路監測 Pro</h2>
+        <p style="font-size: 12px; color: #888;">連線地址: http://172.20.10.9/data</p>
+    </div>
+
+    <div class="card">
+        <div class="card-title">📊 即時量測值</div>
+        <div class="data-grid">
+            <div class="data-item">
+                <div class="data-label">水位高度</div>
+                <div id="val-water" class="data-value">-- <span style="font-size:12px">cm</span></div>
+            </div>
+            <div class="data-item">
+                <div class="data-label">理想流速</div>
+                <div id="val-flow" class="data-value">-- <span style="font-size:12px">cm/min</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">⚙️ 判定邏輯設定</div>
+        <ul class="logic-list">
+            <li>
+                <span>系統總高 (硬體)</span>
+                <span class="badge" style="background: #eee;">50 cm</span>
+            </li>
+            <li>
+                <span>堵塞警示條件</span>
+                <span class="badge" style="background: #fff1f0; color: var(--danger-red);">流速 < 4800 & 水位 ≥ 16.6</span>
+            </li>
+            <li>
+                <span>湍急警示條件</span>
+                <span class="badge" style="background: #fff7e6; color: var(--warning-orange);">流速 > 18000</span>
+            </li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <div class="card-title">🚨 系統診斷結果</div>
+        <div id="status-display" class="status-box">偵測連線中...</div>
+    </div>
+</div>
+
+<script>
+    const TOTAL_HEIGHT = 50; // 總高 50cm
+
+    // 每 1000 毫秒 (1秒) 執行一次
+    setInterval(function() {
+        fetch("http://172.20.10.9/data")
+        .then(res => res.json())
+        .then(data => {
+            // 1. 取得原始數據
+            const waterCm = data.waterLevel;    // Arduino 傳來的水位 (cm)
+            const flowMS = data.flowRate;      // Arduino 傳來的流速 (m/s)
+            
+            // 2. 單位換算：m/s 轉 cm/min (1 m/s = 6000 cm/min)
+            const flowCmMin = flowMS * 6000;
+
+            // 3. 更新數值顯示
+            document.getElementById('val-water').innerHTML = waterCm.toFixed(1) + " <span style='font-size:12px'>cm</span>";
+            document.getElementById('val-flow').innerHTML = Math.floor(flowCmMin) + " <span style='font-size:12px'>cm/min</span>";
+
+            // 4. 判定邏輯
+            const statusBox = document.getElementById('status-display');
+            
+            // 堵塞判斷：流速 < 4800 且 水位 >= 1/3 總高 (16.66)
+            const isBlocked = (flowCmMin < 4800) && (waterCm >= (TOTAL_HEIGHT / 3));
+            
+            // 湍急判斷：流速 > 18000
+            const isTooFast = (flowCmMin > 18000);
+
+            if (isBlocked) {
+                statusBox.innerText = "❌ 偵測到管路堵塞！";
+                statusBox.className = "status-box status-danger";
+            } else if (isTooFast) {
+                statusBox.innerText = "⚠️ 注意：水流過於湍急";
+                statusBox.className = "status-box status-warning";
+            } else {
+                statusBox.innerText = "✅ 系統運作正常";
+                statusBox.className = "status-box status-normal";
+            }
+
+            console.log("即時數據接收成功:", data);
+        })
+        .catch(err => {
+            console.log("抓取失敗，請確認 ESP32 熱點連線");
+            const statusBox = document.getElementById('status-display');
+            statusBox.innerText = "📡 等待硬體連線中...";
+            statusBox.className = "status-box";
+        });
+    }, 1000);
+</script>
+
+</body>
+</html>
